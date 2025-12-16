@@ -1,3 +1,78 @@
-#Production Environment Configurations
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ${DB_POOL_NAME}
+      maximum-pool-size: ${DB_MAX_POOL_SIZE}
+      minimum-idle: ${DB_MIN_IDLE}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT}
+      idle-timeout: ${DB_IDLE_TIMEOUT}
+      max-lifetime: ${DB_MAX_LIFETIME}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT}
+      leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD}
+      initialization-fail-timeout: -1
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO}
+    open-in-view: false
+    properties:
+      hibernate:
+        show_sql: ${HIBERNATE_SHOW_SQL}
+        format_sql: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope:
+              - user:email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+            user-name-attribute: sub
+
+          github:
+            authorization-uri: https://github.com/login/oauth/authorize
+            token-uri: https://github.com/login/oauth/access_token
+            user-info-uri: https://api.github.com/user
+            user-name-attribute: id
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: ${SECURITY_LOG_LEVEL}
+    org.hibernate.SQL: ${HIBERNATE_SQL_LOG_LEVEL}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER}
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS}
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS}
+    refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME}
+    cookie-secure: ${JWT_COOKIE_SECURE}
+    cookie-http-only: ${JWT_COOKIE_HTTP_ONLY}
+    cookie-same-site: ${JWT_COOKIE_SAME_SITE}
+    cookie-domain: ${JWT_COOKIE_DOMAIN}
