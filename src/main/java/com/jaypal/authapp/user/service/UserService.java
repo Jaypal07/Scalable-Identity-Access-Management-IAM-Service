@@ -1,6 +1,7 @@
 package com.jaypal.authapp.user.service;
 
 import com.jaypal.authapp.dto.*;
+import com.jaypal.authapp.user.model.User;
 
 import java.util.List;
 
@@ -22,4 +23,9 @@ public interface UserService {
     );
 
     void deleteUser(String userId);
+
+    /**
+     * INTERNAL USE ONLY (Auth flows)
+     */
+    User createAndReturnDomainUser(UserCreateRequest request);
 }

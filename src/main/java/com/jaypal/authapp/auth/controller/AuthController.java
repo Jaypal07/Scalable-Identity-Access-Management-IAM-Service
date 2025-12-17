@@ -5,6 +5,8 @@ import com.jaypal.authapp.auth.dto.LoginRequest;
 import com.jaypal.authapp.auth.dto.RefreshTokenRequest;
 import com.jaypal.authapp.auth.dto.TokenResponse;
 import com.jaypal.authapp.auth.service.AuthService;
+import com.jaypal.authapp.dto.ForgotPasswordRequest;
+import com.jaypal.authapp.dto.UserCreateRequest;
 import com.jaypal.authapp.infrastructure.cookie.CookieService;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
@@ -15,6 +17,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +40,37 @@ public class AuthController {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
+
+    // ---------------- Register ----------------
+
+    @PostMapping("/register")
+    public ResponseEntity<TokenResponse> register(
+            @RequestBody @Valid UserCreateRequest request,
+            HttpServletResponse response
+    ) {
+
+        // Create user
+        var user = authApplicationService.register(request);
+
+        // Auto-login after register (optional but common)
+        var result = authApplicationService.issueTokens(user);
+
+        cookieService.attachRefreshCookie(
+                response,
+                result.refreshToken(),
+                (int) result.refreshTtlSeconds()
+        );
+        cookieService.addNoStoreHeader(response);
+
+        return ResponseEntity.status(201).body(
+                TokenResponse.of(
+                        result.accessToken(),
+                        jwtService.getAccessTtlSeconds(),
+                        UserMapper.toResponse(user)
+                )
+        );
+    }
+
 
     // ---------------- LOGIN ----------------
 
@@ -150,6 +184,18 @@ public class AuthController {
 
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(
+            @RequestBody ForgotPasswordRequest request
+    ) {
+
+        authApplicationService.initiatePasswordReset(request.email());
+
+        // Always return 204 to prevent email enumeration
+        return ResponseEntity.noContent().build();
+    }
+
 
     // ---------------- HELPERS ----------------
 

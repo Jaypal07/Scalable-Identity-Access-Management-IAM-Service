@@ -118,6 +118,25 @@ public class UserServiceImpl implements UserService {
         return toResponse(userRepository.save(user));
     }
 
+    @Override
+    @Transactional
+    public User createAndReturnDomainUser(UserCreateRequest req) {
+
+        try {
+            User user = User.createLocal(
+                    req.email(),
+                    passwordEncoder.encode(req.password()),
+                    req.name()
+            );
+
+            return userRepository.save(user);
+
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+    }
+
+
 
     @Override
     @Transactional
@@ -134,6 +153,7 @@ public class UserServiceImpl implements UserService {
                                 "User not found with ID: " + id
                         ));
     }
+
 
     private UserResponseDto toResponse(User user) {
         return UserMapper.toResponse(user);
