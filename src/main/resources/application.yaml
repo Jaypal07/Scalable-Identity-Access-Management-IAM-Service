@@ -1,15 +1,8 @@
 server:
   port: ${SERVER_PORT:8081}
 
-  forward-headers-strategy: framework
-
-  servlet:
-    context-path= /
-
   application:
     name: Auth-App-Backend
-    server:
-      ssl:
-        enabled= false
+
   profiles:
     active: prod
