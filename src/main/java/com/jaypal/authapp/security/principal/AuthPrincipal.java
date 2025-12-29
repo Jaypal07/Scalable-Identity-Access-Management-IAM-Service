@@ -1,5 +1,6 @@
 package com.jaypal.authapp.security.principal;
 
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -8,6 +9,7 @@ import java.util.UUID;
 
 public final class AuthPrincipal implements UserDetails {
 
+    @Getter
     private final UUID userId;
     private final String username;
     private final String password;
@@ -26,10 +28,6 @@ public final class AuthPrincipal implements UserDetails {
         this.password = password;
         this.enabled = enabled;
         this.authorities = authorities;
-    }
-
-    public UUID getUserId() {
-        return userId;
     }
 
     @Override

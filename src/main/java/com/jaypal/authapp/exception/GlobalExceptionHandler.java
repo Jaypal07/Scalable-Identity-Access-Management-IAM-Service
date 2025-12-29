@@ -1,6 +1,5 @@
 package com.jaypal.authapp.exception;
 
-import com.jaypal.authapp.audit.annotation.AuthAudit;
 import com.jaypal.authapp.audit.model.AuthAuditEvent;
 import com.jaypal.authapp.audit.service.AuthAuditService;
 import com.jaypal.authapp.dto.ErrorResponse;
@@ -9,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -28,12 +29,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
-    // ---------------------------------------------------------
-    // COMMON UTILITIES
-    // ---------------------------------------------------------
-
     private final AuthAuditService authAuditService;
 
+    // ---------------------------------------------------------
+    // Utility: Extract request path
+    // ---------------------------------------------------------
     private String extractPath(WebRequest request) {
         if (request instanceof ServletWebRequest servletRequest) {
             return servletRequest.getRequest().getRequestURI();
@@ -41,8 +41,11 @@ public class GlobalExceptionHandler {
         return "N/A";
     }
 
+    // ---------------------------------------------------------
+    // Utility: Build standard error response
+    // ---------------------------------------------------------
     private ResponseEntity<ErrorResponse> buildErrorResponse(
-            Exception ex,
+            String message,
             HttpStatus status,
             String path
     ) {
@@ -50,22 +53,21 @@ public class GlobalExceptionHandler {
                 path,
                 status.value(),
                 status.getReasonPhrase(),
-                ex.getMessage()
+                message
         );
 
         return ResponseEntity.status(status).body(errorResponse);
     }
 
     // ---------------------------------------------------------
-    // AUTHENTICATION EXCEPTIONS
+    // Authentication Exceptions
     // ---------------------------------------------------------
-
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(
             BadCredentialsException ex,
             HttpServletRequest request
     ) {
-
+        // Audit login failure
         authAuditService.log(
                 null,
                 AuthAuditEvent.LOGIN_FAILURE,
@@ -75,114 +77,122 @@ public class GlobalExceptionHandler {
                 "Invalid username or password"
         );
 
+        log.warn("Bad credentials at {}: {}", request.getRequestURI(), ex.getMessage());
+
         return buildErrorResponse(
-                ex,
+                "Invalid username or password",
                 HttpStatus.UNAUTHORIZED,
                 request.getRequestURI()
         );
     }
 
-
-    @ExceptionHandler({
-            UsernameNotFoundException.class,
-            DisabledException.class,
-            CredentialException.class
-    })
-    public ResponseEntity<ErrorResponse> handleAuthenticationException(
-            Exception ex, HttpServletRequest request
+    @ExceptionHandler({UsernameNotFoundException.class, DisabledException.class, CredentialException.class})
+    public ResponseEntity<ErrorResponse> handleAuthenticationExceptions(
+            Exception ex,
+            HttpServletRequest request
     ) {
         log.warn("Authentication error at {}: {}", request.getRequestURI(), ex.getMessage());
 
         return buildErrorResponse(
-                ex,
+                ex.getMessage(),
                 HttpStatus.UNAUTHORIZED,
                 request.getRequestURI()
         );
     }
 
     // ---------------------------------------------------------
-    // RESOURCE NOT FOUND
+    // Authorization Exceptions (method-security + access denied)
     // ---------------------------------------------------------
-    @ExceptionHandler(ResourceNotFoundExceptions.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(
-            ResourceNotFoundExceptions ex, WebRequest request
+    @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            Exception ex,
+            WebRequest request
     ) {
         String path = extractPath(request);
+        log.warn("Access denied at {}: {}", path, ex.getMessage());
 
+        return buildErrorResponse(
+                "You do not have permission to access this resource",
+                HttpStatus.FORBIDDEN,
+                path
+        );
+    }
+
+    // ---------------------------------------------------------
+    // Resource Not Found
+    // ---------------------------------------------------------
+    @ExceptionHandler(ResourceNotFoundExceptions.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(
+            ResourceNotFoundExceptions ex,
+            WebRequest request
+    ) {
+        String path = extractPath(request);
         log.warn("Resource not found at {}: {}", path, ex.getMessage());
 
         return buildErrorResponse(
-                ex,
+                ex.getMessage(),
                 HttpStatus.NOT_FOUND,
                 path
         );
     }
 
     // ---------------------------------------------------------
-    // VALIDATION ERRORS (DTO/RequestBody)
+    // Validation Errors (DTO/RequestBody)
     // ---------------------------------------------------------
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Object> handleValidationExceptions(
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex,
             WebRequest request
     ) {
         String path = extractPath(request);
 
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String field = ((FieldError) error).getField();
-            String message = error.getDefaultMessage();
-            errors.put(field, message);
-        });
+        Map<String, String> fieldErrors = new HashMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.put(error.getField(), error.getDefaultMessage());
+        }
 
-        log.warn("Validation error at {}: {}", path, errors);
-
-        ErrorResponse errorResponse = new ErrorResponse(
-                path,
-                HttpStatus.BAD_REQUEST.value(),
-                "Validation Failed",
-                errors.toString()
-        );
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-    }
-
-    // ---------------------------------------------------------
-    // BAD REQUEST
-    // ---------------------------------------------------------
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(
-            IllegalArgumentException ex, WebRequest request
-    ) {
-        String path = extractPath(request);
-        log.warn("Illegal argument at {}: {}", path, ex.getMessage());
+        log.warn("Validation errors at {}: {}", path, fieldErrors);
 
         return buildErrorResponse(
-                ex,
+                fieldErrors.toString(),
                 HttpStatus.BAD_REQUEST,
                 path
         );
     }
 
     // ---------------------------------------------------------
-    // FALLBACK — Global Exception Handler
+    // Bad Request (illegal arguments, etc.)
     // ---------------------------------------------------------
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(
-            Exception ex, WebRequest request
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex,
+            WebRequest request
     ) {
         String path = extractPath(request);
+        log.warn("Illegal argument at {}: {}", path, ex.getMessage());
 
-        // Log full stack trace for internal debugging
-        log.error("Unexpected error at {}: {}", path, ex.toString(), ex);
-
-        ErrorResponse errorResponse = new ErrorResponse(
-                path,
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Internal Server Error",
-                "An unexpected error occurred. Please try again later."
+        return buildErrorResponse(
+                ex.getMessage(),
+                HttpStatus.BAD_REQUEST,
+                path
         );
+    }
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    // ---------------------------------------------------------
+    // Fallback: Generic Exception Handler
+    // ---------------------------------------------------------
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(
+            Exception ex,
+            WebRequest request
+    ) {
+        String path = extractPath(request);
+        log.error("Unexpected error at {}: {}", path, ex.getMessage(), ex);
+
+        return buildErrorResponse(
+                "An unexpected error occurred. Please try again later.",
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                path
+        );
     }
 }

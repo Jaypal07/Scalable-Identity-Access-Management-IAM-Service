@@ -38,7 +38,7 @@ public class JwtService {
     }
 
     // -------------------------------------------------
-    // GENERATION
+    // TOKEN GENERATION
     // -------------------------------------------------
 
     public String generateAccessToken(User user) {
@@ -76,31 +76,32 @@ public class JwtService {
     }
 
     // -------------------------------------------------
-    // VALIDATION
+    // PARSE & VALIDATE
     // -------------------------------------------------
 
-    public boolean isAccessToken(String token) {
-        return getTokenType(token) == TokenType.ACCESS;
+    public Jws<Claims> parse(String token) {
+        return JwtUtils.parse(secretKey, issuer, token);
     }
 
-    public boolean isRefreshToken(String token) {
-        return getTokenType(token) == TokenType.REFRESH;
+    public boolean isAccessToken(Jws<Claims> parsed) {
+        return TokenType.from(parsed.getBody().get(CLAIM_TYPE, String.class))
+                == TokenType.ACCESS;
     }
 
-    public UUID getUserId(String token) {
-        return JwtUtils.getSubjectId(secretKey, token);
+    // -------------------------------------------------
+    // CLAIM EXTRACTION (SAFE)
+    // -------------------------------------------------
+
+    public UUID extractUserId(Claims claims) {
+        return UUID.fromString(claims.getSubject());
     }
 
-    public String getEmail(String token) {
-        return (String) JwtUtils.getClaim(secretKey, token, CLAIM_EMAIL);
+    public String extractEmail(Claims claims) {
+        return claims.get(CLAIM_EMAIL, String.class);
     }
 
-    public String getJti(String token) {
-        return JwtUtils.getJti(secretKey, token);
-    }
-
-    public List<String> getRoles(String token) {
-        Object raw = JwtUtils.getClaim(secretKey, token, CLAIM_ROLES);
+    public List<String> extractRoles(Claims claims) {
+        Object raw = claims.get(CLAIM_ROLES);
         if (raw == null) return List.of();
 
         if (!(raw instanceof List<?> list)) {
@@ -112,21 +113,16 @@ public class JwtService {
                 .collect(Collectors.toList());
     }
 
-    private TokenType getTokenType(String token) {
-        String raw = (String) JwtUtils.getClaim(secretKey, token, CLAIM_TYPE);
-        return TokenType.from(raw);
-    }
-
-    // -------------------------------------------------
-    // INTERNAL
-    // -------------------------------------------------
-
     private List<String> extractRoles(User user) {
         if (user.getRoles() == null) return List.of();
-        return user.getRoles()
-                .stream()
+        return user.getRoles().stream()
                 .map(r -> r.getName())
                 .collect(Collectors.toList());
+    }
+
+    public boolean isRefreshToken(Jws<Claims> parsed) {
+        return TokenType.from(parsed.getBody().get("typ", String.class))
+                == TokenType.REFRESH;
     }
 
     private void validateSecret(String secret) {

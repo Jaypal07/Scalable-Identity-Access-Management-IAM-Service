@@ -15,6 +15,9 @@ import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.token.model.RefreshToken;
 import com.jaypal.authapp.token.service.RefreshTokenService;
 import com.jaypal.authapp.user.mapper.UserMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,7 +46,7 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
 
-    // ---------------- Register ----------------
+    // ---------------- REGISTER ----------------
 
     @AuthAudit(event = AuthAuditEvent.REGISTER_AND_LOGIN)
     @PostMapping("/register")
@@ -52,10 +55,7 @@ public class AuthController {
             HttpServletResponse response
     ) {
 
-        // Create user
         var user = authApplicationService.register(request);
-
-        // Auto-login after register (optional but common)
         var result = authApplicationService.issueTokens(user);
 
         cookieService.attachRefreshCookie(
@@ -73,7 +73,6 @@ public class AuthController {
                 )
         );
     }
-
 
     // ---------------- LOGIN ----------------
 
@@ -125,12 +124,20 @@ public class AuthController {
                 .orElseThrow(() ->
                         new BadCredentialsException("Refresh token is missing"));
 
-        if (!jwtService.isRefreshToken(refreshJwt)) {
+        Jws<Claims> parsed;
+        try {
+            parsed = jwtService.parse(refreshJwt);
+        } catch (JwtException ex) {
             throw new BadCredentialsException("Invalid refresh token");
         }
 
-        String jti = jwtService.getJti(refreshJwt);
-        UUID userId = jwtService.getUserId(refreshJwt);
+        if (!jwtService.isRefreshToken(parsed)) {
+            throw new BadCredentialsException("Invalid refresh token");
+        }
+
+        Claims claims = parsed.getBody();
+        UUID userId = UUID.fromString(claims.getSubject());
+        String jti = claims.getId();
 
         RefreshToken current =
                 refreshTokenService.validate(jti, userId);
@@ -177,11 +184,11 @@ public class AuthController {
 
         readRefreshToken(null, request).ifPresent(token -> {
             try {
-                if (jwtService.isRefreshToken(token)) {
-                    refreshTokenService
-                            .revokeIfExists(jwtService.getJti(token));
+                Jws<Claims> parsed = jwtService.parse(token);
+                if (jwtService.isRefreshToken(parsed)) {
+                    refreshTokenService.revokeIfExists(parsed.getBody().getId());
                 }
-            } catch (Exception ignored) {}
+            } catch (JwtException ignored) {}
         });
 
         cookieService.clearRefreshCookie(response);
@@ -191,17 +198,16 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    // ---------------- FORGOT PASSWORD ----------------
+
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(
             @RequestBody ForgotPasswordRequest request
     ) {
 
         authApplicationService.initiatePasswordReset(request.email());
-
-        // Always return 204 to prevent email enumeration
         return ResponseEntity.noContent().build();
     }
-
 
     // ---------------- HELPERS ----------------
 

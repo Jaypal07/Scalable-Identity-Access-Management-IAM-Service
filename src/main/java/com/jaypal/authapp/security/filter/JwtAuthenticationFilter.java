@@ -2,6 +2,9 @@ package com.jaypal.authapp.security.filter;
 
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,48 +35,67 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String header = request.getHeader("Authorization");
 
-        if (header != null && header.startsWith("Bearer ")) {
-
-            String token = header.substring(7);
-
-            if (!jwtService.isAccessToken(token)) {
-                chain.doFilter(request, response);
-                return;
-            }
-
-            if (SecurityContextHolder.getContext().getAuthentication() == null) {
-
-                AuthPrincipal principal = new AuthPrincipal(
-                        jwtService.getUserId(token),
-                        jwtService.getEmail(token),
-                        null, // ✅ password not needed for JWT-authenticated requests
-                        true,
-                        jwtService.getRoles(token)
-                                .stream()
-                                .map(SimpleGrantedAuthority::new)
-                                .collect(Collectors.toSet())
-                );
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                principal,
-                                null,
-                                principal.getAuthorities()
-                        );
-
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }
+        if (header == null || !header.startsWith("Bearer ")) {
+            chain.doFilter(request, response);
+            return;
         }
 
+        String token = header.substring(7).trim();
+
+        // 1️⃣ Parse ONCE. Enforces signature, expiry, issuer.
+        Jws<Claims> parsed;
+        try {
+            parsed = jwtService.parse(token);
+        } catch (JwtException ex) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 2️⃣ Enforce access-token usage
+        if (!jwtService.isAccessToken(parsed)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 3️⃣ Do not override existing authentication
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        Claims claims = parsed.getBody();
+
+        AuthPrincipal principal = new AuthPrincipal(
+                jwtService.extractUserId(claims),
+                jwtService.extractEmail(claims),
+                null,
+                true,
+                jwtService.extractRoles(claims)
+                        .stream()
+                        .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toSet())
+        );
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        principal.getAuthorities()
+                );
+
+        authentication.setDetails(
+                new WebAuthenticationDetailsSource().buildDetails(request)
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
         chain.doFilter(request, response);
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/api/v1/auth");
+        String path = request.getRequestURI();
+        return path.equals("/api/v1/auth/login")
+                || path.equals("/api/v1/auth/register");
     }
 }

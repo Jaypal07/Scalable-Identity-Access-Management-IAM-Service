@@ -2,6 +2,7 @@ package com.jaypal.authapp.auth.service;
 
 import com.jaypal.authapp.auth.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.repositoty.PasswordResetTokenRepository;
+import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.dto.UserCreateRequest;
 import com.jaypal.authapp.infrastructure.email.EmailService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
@@ -33,9 +34,7 @@ public class AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-
-    @Value("${app.frontend.base-url}")
-    private String frontendBaseUrl;
+    private final FrontendProperties frontendProperties;
 
 
     @Transactional
@@ -107,7 +106,7 @@ public class AuthService {
             passwordResetTokenRepository.save(token);
 
             String resetLink =
-                    frontendBaseUrl +
+                    frontendProperties.getBaseUrl() +
                             "/reset-password?token=" +
                             token.getToken();
 
