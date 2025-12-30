@@ -1,5 +1,6 @@
 package com.jaypal.authapp.oauth.handler;
 
+import com.jaypal.authapp.config.FrontendProperties;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -13,6 +14,8 @@ import java.io.IOException;
 @Component
 @AllArgsConstructor
 public class FailureHandler implements AuthenticationFailureHandler {
+
+    private final FrontendProperties frontendProperties;
 
     @Override
     public void onAuthenticationFailure(
@@ -37,5 +40,6 @@ public class FailureHandler implements AuthenticationFailureHandler {
               "message": "%s"
             }
         """.formatted(errorMessage));
+        response.sendRedirect(frontendProperties.getFailureRedirect());
     }
 }
