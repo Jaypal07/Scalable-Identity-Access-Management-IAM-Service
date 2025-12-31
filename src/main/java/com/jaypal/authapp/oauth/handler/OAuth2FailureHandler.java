@@ -1,19 +1,20 @@
 package com.jaypal.authapp.oauth.handler;
 
 import com.jaypal.authapp.config.FrontendProperties;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
-
 import java.io.IOException;
+import java.util.Objects;
 
+@Slf4j
 @Component
-@AllArgsConstructor
-public class FailureHandler implements AuthenticationFailureHandler {
+@RequiredArgsConstructor
+public class OAuth2FailureHandler implements AuthenticationFailureHandler {
 
     private final FrontendProperties frontendProperties;
 
@@ -22,24 +23,23 @@ public class FailureHandler implements AuthenticationFailureHandler {
             HttpServletRequest request,
             HttpServletResponse response,
             AuthenticationException exception
-    ) throws IOException, ServletException {
+    ) throws IOException {
+
+        Objects.requireNonNull(exception, "AuthenticationException must not be null");
+
+        final String redirectUrl = frontendProperties.getFailureRedirect();
+        Objects.requireNonNull(
+                redirectUrl,
+                "Frontend failure redirect must be configured"
+        );
+
+        log.warn(
+                "OAuth2 authentication failure: {}",
+                exception.getMessage(),
+                exception
+        );
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-
-        String errorMessage = "Authentication failed";
-
-        if (exception.getMessage() != null) {
-            errorMessage = exception.getMessage();
-        }
-
-        response.getWriter().write("""
-            {
-              "success": false,
-              "error": "OAUTH2_AUTHENTICATION_FAILED",
-              "message": "%s"
-            }
-        """.formatted(errorMessage));
-        response.sendRedirect(frontendProperties.getFailureRedirect());
+        response.sendRedirect(redirectUrl);
     }
 }

@@ -13,7 +13,6 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPasswordResetEmail(String to, String resetLink) {
-
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("Reset your password");
@@ -26,4 +25,23 @@ public class EmailServiceImpl implements EmailService {
 
         mailSender.send(message);
     }
+
+    @Override
+    public void sendVerificationEmail(String to, String verifyLink) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject("Verify your email address");
+        message.setText("""
+                Welcome! 🎉
+
+                Please verify your email address by clicking the link below:
+
+                %s
+
+                If you did not create this account, please ignore this email.
+                """.formatted(verifyLink));
+
+        mailSender.send(message);
+    }
 }
+

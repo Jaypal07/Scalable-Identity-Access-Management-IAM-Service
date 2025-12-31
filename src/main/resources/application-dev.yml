@@ -4,8 +4,8 @@ server:
 app:
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
-    success-redirect: ${FRONTEND_SUCCESS_REDIRECT:http://localhost:5173}
-    failure-redirect: ${FRONTEND_FAILURE_REDIRECT:http://localhost:5173}
+    success-redirect: ${FRONTEND_SUCCESS_REDIRECT:http://localhost:5173/oauth/success}
+    failure-redirect: ${FRONTEND_FAILURE_REDIRECT:http://localhost:5173/oauth/failed}
 
 spring:
   datasource:
