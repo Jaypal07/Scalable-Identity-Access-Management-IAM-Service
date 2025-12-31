@@ -6,6 +6,7 @@ import com.jaypal.authapp.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -139,6 +140,34 @@ public class GlobalExceptionHandler {
     // ---------------------------------------------------------
     // Validation Errors (DTO/RequestBody)
     // ---------------------------------------------------------
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            WebRequest request
+    ) {
+        String path = extractPath(request);
+        log.warn("Data integrity violation at {}: {}", path, ex.getMessage());
+
+        // Default message
+        String message = "Data integrity error";
+
+        // Inspect root cause message for unique constraint on email
+        if (ex.getRootCause() != null) {
+            String rootMessage = ex.getRootCause().getMessage().toLowerCase();
+
+            // Check for common patterns for email uniqueness violation
+            if (rootMessage.contains("unique") && rootMessage.contains("email")) {
+                message = "Email already exists";
+            }
+        }
+
+        return buildErrorResponse(
+                message,
+                HttpStatus.BAD_REQUEST,
+                path
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex,
