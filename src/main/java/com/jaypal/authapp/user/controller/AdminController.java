@@ -24,6 +24,7 @@ public class AdminController {
     @PostMapping
     public ResponseEntity<UserResponseDto> create(
             @RequestBody @Valid UserCreateRequest req
+
     ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)

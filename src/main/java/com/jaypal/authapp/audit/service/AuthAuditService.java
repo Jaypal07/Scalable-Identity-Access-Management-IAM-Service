@@ -1,14 +1,16 @@
 package com.jaypal.authapp.audit.service;
 
-import com.jaypal.authapp.audit.model.AuthAuditEvent;
-import com.jaypal.authapp.audit.model.AuthAuditLog;
+import com.jaypal.authapp.audit.model.*;
 import com.jaypal.authapp.audit.repository.AuthAuditRepository;
+import com.jaypal.authapp.audit.validation.AuthAuditMatrix;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthAuditService {
@@ -21,20 +23,36 @@ public class AuthAuditService {
             String provider,
             HttpServletRequest request,
             boolean success,
-            String reason
+            AuthFailureReason failureReason
     ) {
+        try {
+            if (!success && !AuthAuditMatrix.isAllowed(event, failureReason)) {
+                log.warn(
+                        "Invalid audit event/reason combination. event={}, reason={}",
+                        event, failureReason
+                );
+                failureReason = AuthFailureReason.SYSTEM_ERROR;
+            }
 
-        repository.save(
-                AuthAuditLog.builder()
-                        .userId(userId)
-                        .eventType(event)
-                        .provider(provider)
-                        .success(success)
-                        .reason(reason)
-                        .ipAddress(extractIp(request))
-                        .userAgent(request.getHeader("User-Agent"))
-                        .build()
-        );
+            repository.save(
+                    AuthAuditLog.builder()
+                            .userId(userId)
+                            .eventType(event)
+                            .provider(provider)
+                            .success(success)
+                            .failureReason(success ? null : failureReason)
+                            .ipAddress(extractIp(request))
+                            .userAgent(request.getHeader("User-Agent"))
+                            .build()
+            );
+
+        } catch (Exception ex) {
+            // ABSOLUTE RULE: audit must never break auth
+            log.error(
+                    "Audit logging failed. event={}, success={}, reason={}",
+                    event, success, failureReason, ex
+            );
+        }
     }
 
     private String extractIp(HttpServletRequest request) {

@@ -7,6 +7,5 @@ public record AdminUserUpdateRequest(
         String name,
         String image,
         boolean enabled,
-        Set<RoleDto> roles,
-        Provider provider
+        Set<RoleDto> roles
 ) {}

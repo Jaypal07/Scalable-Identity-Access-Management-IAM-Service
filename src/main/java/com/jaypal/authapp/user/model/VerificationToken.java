@@ -1,32 +1,58 @@
 package com.jaypal.authapp.user.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 @Entity
+@Table(
+        name = "verification_token",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "verification_token_user_id_key",
+                        columnNames = {"user_id"}
+                ),
+                @UniqueConstraint(
+                        name = "verification_token_token_key",
+                        columnNames = {"token"}
+                )
+        }
+)
 @Getter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class VerificationToken {
+
+    private static final long EXPIRY_MINUTES = 15;
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue
+    private UUID id;
 
     @Column(nullable = false, unique = true)
     private String token;
 
-    @OneToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
-
     @Column(nullable = false)
     private Instant expiryDate;
 
-    public VerificationToken(String token, User user) {
-        this.token = token;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private User user;
+
+    public VerificationToken(User user) {
         this.user = user;
-        this.expiryDate = Instant.now().plus(java.time.Duration.ofHours(24)); // 24h validity
+        regenerate();
+    }
+
+    public void regenerate() {
+        this.token = UUID.randomUUID().toString();
+        this.expiryDate = Instant.now().plus(EXPIRY_MINUTES, ChronoUnit.MINUTES);
+    }
+
+    public boolean isExpired() {
+        return expiryDate.isBefore(Instant.now());
     }
 }

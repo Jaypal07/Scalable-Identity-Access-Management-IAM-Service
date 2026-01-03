@@ -1,10 +1,15 @@
 package com.jaypal.authapp.token.service;
 
+import com.jaypal.authapp.exception.refresh.RefreshTokenExpiredException;
+import com.jaypal.authapp.exception.refresh.RefreshTokenNotFoundException;
+import com.jaypal.authapp.exception.refresh.RefreshTokenRevokedException;
+import com.jaypal.authapp.exception.refresh.RefreshTokenUserMismatchException;
 import com.jaypal.authapp.token.model.RefreshToken;
 import com.jaypal.authapp.token.repository.RefreshTokenRepository;
 import com.jaypal.authapp.user.model.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -36,26 +41,26 @@ public class RefreshTokenService {
     }
 
     // -------------------------------------------------
-    // VALIDATE
+    // VALIDATE (FIXED)
     // -------------------------------------------------
 
     @Transactional
     public RefreshToken validate(String jti, UUID userId) {
 
-        RefreshToken token = refreshTokenRepository.findByJti(jti)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Refresh token not recognized"));
+        RefreshToken token =
+                refreshTokenRepository.findByJtiWithUserAndRoles(jti)
+                        .orElseThrow(RefreshTokenNotFoundException::new);
 
         if (token.isRevoked()) {
-            throw new IllegalArgumentException("Refresh token revoked");
+            throw new RefreshTokenRevokedException();
         }
 
         if (token.getExpiresAt().isBefore(Instant.now())) {
-            throw new IllegalArgumentException("Refresh token expired");
+            throw new RefreshTokenExpiredException();
         }
 
         if (!token.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Refresh token user mismatch");
+            throw new RefreshTokenUserMismatchException();
         }
 
         return token;

@@ -2,6 +2,7 @@ package com.jaypal.authapp.user.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -11,8 +12,14 @@ import java.util.UUID;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"provider", "provider_id"}),
-                @UniqueConstraint(columnNames = {"email"})
+                @UniqueConstraint(
+                        name = "jk_users_provider_provider_id",
+                        columnNames = {"provider", "provider_id"}
+                ),
+                @UniqueConstraint(
+                        name = "users_email",
+                        columnNames = {"email"}
+                )
         }
 )
 @Getter
@@ -26,7 +33,7 @@ public class User {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(unique = true)
+    @Column(nullable = false)
     private String email;
 
     private String password;
@@ -63,11 +70,7 @@ public class User {
 
     // ---------------- FACTORIES ----------------
 
-    public static User createLocal(
-            String email,
-            String password,
-            String name
-    ) {
+    public static User createLocal(String email, String password, String name) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
 
@@ -107,16 +110,20 @@ public class User {
                 .build();
     }
 
-    // ---------------- DOMAIN INTENT ----------------
+    // ---------------- DOMAIN ----------------
 
     public void enable() {
         this.enabled = true;
         this.updatedAt = Instant.now();
     }
 
-    public void setRoles(Set<Role> roles) {
-        this.roles.clear();
-        this.roles.addAll(roles);
+    public void disable() {
+        this.enabled = false;
+        this.updatedAt = Instant.now();
+    }
+
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
         this.updatedAt = Instant.now();
     }
 
@@ -126,13 +133,9 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    public void changePassword(String encodedPassword) {
-        this.password = encodedPassword;
-        this.updatedAt = Instant.now();
-    }
-
-    public void disable() {
-        this.enabled = false;
+    public void setRoles(Set<Role> roles) {
+        this.roles.clear();
+        this.roles.addAll(roles);
         this.updatedAt = Instant.now();
     }
 }

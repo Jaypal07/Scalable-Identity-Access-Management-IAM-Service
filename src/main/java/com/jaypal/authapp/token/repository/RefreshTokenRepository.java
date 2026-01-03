@@ -12,7 +12,18 @@ import java.util.UUID;
 
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
-    Optional<RefreshToken> findByJti(String refreshToken);
+
+    Optional<RefreshToken> findByJti(String jti);
+
+    @Query("""
+        select rt
+        from RefreshToken rt
+        join fetch rt.user u
+        join fetch u.roles
+        where rt.jti = :jti
+    """)
+    Optional<RefreshToken> findByJtiWithUserAndRoles(@Param("jti") String jti);
+
     @Modifying
     @Query("""
         update RefreshToken rt
@@ -22,3 +33,4 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     """)
     void revokeAllActiveByUserId(@Param("userId") UUID userId);
 }
+

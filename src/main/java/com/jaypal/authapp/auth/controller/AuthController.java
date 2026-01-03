@@ -19,7 +19,6 @@ import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -53,9 +52,6 @@ public class AuthController {
             @RequestBody @Valid UserCreateRequest request
     ) {
         authApplicationService.register(request);
-
-        // Do NOT issue tokens here.
-        // Return a message telling them to check their inbox.
         return ResponseEntity.status(201).body("Registration successful. Please check your email to verify your account.");
     }
 
@@ -75,7 +71,6 @@ public class AuthController {
     // ---------------- LOGIN ----------------
 
     @AuthAudit(event = AuthAuditEvent.LOGIN_SUCCESS)
-    @Transactional
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
             @RequestBody LoginRequest request,
@@ -110,7 +105,6 @@ public class AuthController {
     // ---------------- REFRESH ----------------
 
     @AuthAudit(event = AuthAuditEvent.TOKEN_ROTATION)
-    @Transactional
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(
             @RequestBody(required = false) RefreshTokenRequest body,
@@ -253,15 +247,11 @@ public class AuthController {
     }
 
     private Authentication authenticate(LoginRequest request) {
-        try {
             return authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.email(),
                             request.password()
                     )
             );
-        } catch (Exception ex) {
-            throw new BadCredentialsException("Invalid username or password");
-        }
     }
 }

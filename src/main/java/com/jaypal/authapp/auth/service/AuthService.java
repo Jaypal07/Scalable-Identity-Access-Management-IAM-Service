@@ -1,6 +1,7 @@
 package com.jaypal.authapp.auth.service;
 
 import com.jaypal.authapp.auth.dto.AuthLoginResult;
+import com.jaypal.authapp.auth.event.UserRegisteredEvent;
 import com.jaypal.authapp.auth.repositoty.PasswordResetTokenRepository;
 import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.dto.UserCreateRequest;
@@ -15,6 +16,7 @@ import com.jaypal.authapp.user.repository.UserRepository;
 import com.jaypal.authapp.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -37,12 +39,15 @@ public class AuthService {
     private final EmailService emailService;
     private final FrontendProperties frontendProperties;
     private final EmailVerificationService  emailVerificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
 
     @Transactional
     public void register(UserCreateRequest request) {
         User user = userService.createAndReturnDomainUser(request);
-        emailVerificationService.createVerificationToken(user);
+
+        // Publish event. No email sent here.
+        eventPublisher.publishEvent(new UserRegisteredEvent(user));
     }
 
 

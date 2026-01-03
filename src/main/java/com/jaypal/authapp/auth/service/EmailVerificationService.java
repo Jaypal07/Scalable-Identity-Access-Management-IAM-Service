@@ -2,17 +2,14 @@ package com.jaypal.authapp.auth.service;
 
 import com.jaypal.authapp.auth.repositoty.EmailVerificationTokenRepository;
 import com.jaypal.authapp.config.FrontendProperties;
-import com.jaypal.authapp.exception.ResourceNotFoundException;
+import com.jaypal.authapp.exception.email.VerificationException;
 import com.jaypal.authapp.infrastructure.email.EmailService;
 import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.model.VerificationToken;
 import com.jaypal.authapp.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
-
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -21,56 +18,49 @@ public class EmailVerificationService {
     private final EmailVerificationTokenRepository tokenRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
-    private final FrontendProperties frontendProperties; // Use your existing config
+    private final FrontendProperties frontendProperties;
+
+    // ---------------- CREATE / RESEND ----------------
 
     @Transactional
     public void createVerificationToken(User user) {
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = new VerificationToken(token, user);
-        tokenRepository.save(verificationToken);
+        VerificationToken token = tokenRepository.findByUser(user)
+                .orElseGet(() -> new VerificationToken(user));
 
-        // Build link using your frontend properties or server base URL
-        String verifyLink = frontendProperties.getBaseUrl() + "/email-verify?token=" + token;
+        token.regenerate();
+        tokenRepository.save(token);
+
+        String verifyLink = frontendProperties.getBaseUrl()
+                + "/email-verify?token=" + token.getToken();
 
         emailService.sendVerificationEmail(user.getEmail(), verifyLink);
     }
 
     @Transactional
     public void resendVerificationToken(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (user.isEnabled()) {
-            throw new IllegalStateException("Account is already verified");
-        }
-
-        // 1. Remove any existing tokens for this user
-        tokenRepository.deleteByUser(user);
-
-        // 2. Generate and save new token
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = new VerificationToken(token, user);
-        tokenRepository.save(verificationToken);
-
-        // 3. Send email
-        String verifyLink = frontendProperties.getBaseUrl() + "/email-verify?token=" + token;
-        emailService.sendVerificationEmail(user.getEmail(), verifyLink);
+        userRepository.findByEmail(email).ifPresent(user -> {
+            if (!user.isEnabled()) {
+                createVerificationToken(user);
+            }
+        });
     }
 
-    @Transactional
-    public void verifyEmail(String token) {
-        VerificationToken vToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new BadCredentialsException("Invalid or expired token"));
+    // ---------------- VERIFY ----------------
 
-        if (vToken.getExpiryDate().isBefore(java.time.Instant.now())) {
-            tokenRepository.delete(vToken);
-            throw new BadCredentialsException("Token expired");
+    @Transactional
+    public void verifyEmail(String tokenValue) {
+        VerificationToken token = tokenRepository.findByToken(tokenValue)
+                .orElseThrow(() -> new VerificationException("Invalid verification token"));
+
+        if (token.isExpired()) {
+            tokenRepository.delete(token);
+            throw new VerificationException("Invalid verification token");
         }
 
-        User user = vToken.getUser();
-        user.enable(); // Uses your domain method
-        userRepository.save(user);
+        User user = token.getUser();
+        user.enable();
 
-        tokenRepository.delete(vToken);
+        tokenRepository.delete(token);
+        userRepository.save(user);
     }
 }
